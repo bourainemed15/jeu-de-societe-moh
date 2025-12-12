@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MEDICI - Le Jeu de Société</title>
+    <!-- 
+        MEDICI (Reiner Knizia) - Implémentation Web
+        Design Renaissance & Identité des Joueurs
+        
+        Mise à jour PC :
+        - Layout Grid avancé pour Desktop (HUD / Centre + Monopoles / Joueurs).
+        - Cartes agrandies sur grand écran.
+    -->
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Italianno&family=Crimson+Text:wght@400;600;700&display=swap');
+
+        :root {
+            --gold-bright: #FFD700;
+            --gold-medium: #C5A028;
+            --gold-dark: #8A6E18;
+            --burgundy: #591C21;
+            --burgundy-light: #802A32;
+            --wood-dark: #3E2723;
+            --wood-light: #5D4037;
+            --parchment: #F0E6D2;
+            --parchment-shadow: #D8C8A8;
+            --ink: #2C1810;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Crimson Text', serif;
+            background-color: var(--wood-dark);
+            background-image: repeating-linear-gradient(45deg, rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 4px);
+            min-height: 100vh;
+            color: var(--ink);
+            padding-bottom: 40px;
+        }
+
+        /* ----- TYPOGRAPHIE & TITRES ----- */
+        h1, h2, h3 { font-family: 'Cinzel', serif; text-align: center; }
+        
+        .header-container { text-align: center; margin-bottom: 20px; padding-top: 10px; }
+
+        .main-title {
+            font-size: clamp(3rem, 6vw, 5rem);
+            color: var(--gold-bright);
+            text-shadow: 
+                0 2px 0 var(--wood-dark),
+                0 4px 4px rgba(0,0,0,0.8);
+            margin: 0;
+            letter-spacing: 0.1em;
+            font-weight: 900;
+            border-bottom: 2px solid var(--gold-medium);
+            display: inline-block;
+            padding: 0 40px;
+            background: linear-gradient(to right, transparent, rgba(0,0,0,0.5), transparent);
+        }
+        
+        .sub-title {
+            font-family: 'Italianno', cursive;
+            font-size: 2.5rem;
+            color: var(--parchment);
+            opacity: 0.9;
+            margin-top: -15px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* ----- LAYOUT PRINCIPAL ----- */
+        .game-board {
+            max-width: 1600px; /* Élargi pour PC */
+            margin: 0 auto;
+            padding: 20px;
+            display: grid;
+            gap: 25px;
+            /* Layout Mobile par défaut */
+            grid-template-columns: 1fr;
+        }
+
+        /* ----- ZONE D'INFO & HUD ----- */
+        .hud-panel {
+            grid-area: hud;
+            background: linear-gradient(to bottom, var(--parchment), var(--parchment-shadow));
+            padding: 15px 30px;
+            border-radius: 8px;
+            border: 4px ridge var(--gold-dark);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        
+        .hud-panel::before {
+            content: ''; position: absolute; top: 4px; left: 4px; right: 4px; bottom: 4px;
+            border: 1px solid var(--ink); opacity: 0.2; pointer-events: none;
+        }
+
+        .game-status {
+            font-family: 'Cinzel', serif;
+            font-size: 1.4em;
+            color: var(--burgundy);
+            font-weight: bold;
+        }
+        
+        .game-status span { margin-right: 30px; }
+
+        /* ----- ZONE CENTRALE (ENCHÈRES) ----- */
+        .central-area {
+            grid-area: central;
+            background: #fffdf5;
+            border: 10px solid var(--wood-light);
+            box-shadow: 
+                inset 0 0 50px rgba(0,0,0,0.2),
+                0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 4px;
+            padding: 40px;
+            min-height: 400px; /* Plus haut sur PC */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center; /* Centré verticalement */
+            position: relative;
+            background-image: url("data:image/svg+xml,%3Csvg width='200' height='200' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.05'/%3E%3C/svg%3E");
+        }
+
+        .phase-indicator {
+            font-family: 'Cinzel', serif;
+            font-size: 2rem;
+            color: var(--burgundy);
+            margin-bottom: 20px;
+            font-weight: 700;
+            text-transform: uppercase;
+            border-bottom: 3px solid var(--gold-medium);
+            padding-bottom: 10px;
+        }
+
+        .lot-display {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            min-height: 220px;
+            width: 100%;
+            padding: 20px;
+            background: rgba(0,0,0,0.03);
+            border-radius: 10px;
+        }
+
+        /* ----- CARTES ----- */
+        .card {
+            width: 140px; /* Plus large sur PC */
+            height: 210px; /* Plus haut sur PC */
+            border-radius: 10px;
+            border: 6px solid #e0e0e0;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 15px;
+            font-family: 'Cinzel', serif;
+            font-weight: bold;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            position: relative;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background-size: cover;
+            cursor: default;
+        }
+
+        @keyframes dealCard {
+            from { transform: translateY(-50px) rotate(-10deg) scale(0.8); opacity: 0; }
+            to { transform: translateY(0) rotate(0) scale(1); opacity: 1; }
+        }
+
+        .card:hover { transform: translateY(-15px) scale(1.1); z-index: 100; box-shadow: 0 15px 30px rgba(0,0,0,0.6); }
+
+        .card-val { font-size: 3.5rem; align-self: flex-start; line-height: 0.9; }
+        .card-icon { font-size: 4.5rem; align-self: center; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.6)); }
+        .card-name { font-size: 0.9rem; align-self: center; text-transform: uppercase; letter-spacing: 2px; background: rgba(0,0,0,0.4); padding: 4px 10px; border-radius: 4px; }
+
+        /* Couleurs des cartes inspirées de pigments naturels */
+        .card.cloth { background: linear-gradient(135deg, #9b111e, #580812); border-color: #d88188; } /* Cramoisi */
+        .card.fur { background: linear-gradient(135deg, #5d4037, #3e2723); border-color: #a1887f; } /* Cuir */
+        .card.grain { background: linear-gradient(135deg, #d4a017, #b8860b); border-color: #ebd793; } /* Ocre */
+        .card.dye { background: linear-gradient(135deg, #1a237e, #0d47a1); border-color: #8fa1e3; } /* Indigo */
+        .card.metal { background: linear-gradient(135deg, #607d8b, #455a64); border-color: #b0bec5; } /* Étain */
+        .card.gold { background: radial-gradient(circle, #ffd700, #daa520); border-color: #fffacd; color: #4a0012; border: 6px solid var(--gold-medium); } 
+
+        /* ----- ACTIONS & BOUTONS ----- */
+        .action-bar {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: auto;
+            width: 100%;
+        }
+
+        button {
+            font-family: 'Cinzel', serif;
+            padding: 15px 35px;
+            border: none;
+            cursor: pointer;
+            font-size: 1.2rem;
+            font-weight: bold;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            position: relative;
+            letter-spacing: 1px;
+            box-shadow: 0 6px 10px rgba(0,0,0,0.3);
+        }
+        
+        /* Style Sceau de Cire */
+        .btn-primary {
+            background: radial-gradient(circle at 30% 30%, #a03030, #800000);
+            color: #ffebcd;
+            border-radius: 50% 10% 50% 10% / 10% 50% 10% 50%; /* Forme organique */
+            border: 2px solid #500000;
+        }
+        .btn-primary:hover:not(:disabled) { transform: scale(1.08); box-shadow: 0 0 20px #a03030; }
+
+        /* Style Parchemin */
+        .btn-secondary {
+            background: var(--parchment);
+            color: var(--ink);
+            border-radius: 4px;
+            border: 2px solid var(--wood-light);
+            background-image: linear-gradient(to bottom, transparent, rgba(0,0,0,0.05));
+        }
+        .btn-secondary:hover:not(:disabled) { background: #fff; transform: translateY(-3px); box-shadow: 0 8px 15px rgba(0,0,0,0.2); }
+
+        button:disabled { opacity: 0.5; filter: grayscale(1); cursor: not-allowed; transform: none !important; }
+
+        .bid-input-group {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0,0,0,0.05);
+            padding: 10px 25px;
+            border-radius: 30px;
+            border: 2px solid var(--gold-medium);
+        }
+
+        input[type="number"] {
+            width: 90px;
+            padding: 5px;
+            font-size: 1.5rem;
+            border: none;
+            border-bottom: 3px solid var(--burgundy);
+            background: transparent;
+            text-align: center;
+            font-family: 'Crimson Text', serif;
+            font-weight: bold;
+            color: var(--burgundy);
+        }
+        
+        input[type="number"]:focus { outline: none; border-color: var(--gold-bright); }
+
+        /* ----- JOUEURS ----- */
+        .players-container {
+            grid-area: players;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); /* Mobile default */
+            gap: 20px;
+        }
+
+        .player-panel {
+            background: var(--parchment);
+            border: 5px solid var(--wood-light);
+            border-radius: 8px;
+            padding: 15px;
+            position: relative;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .player-panel:hover { transform: translateY(-5px); box-shadow: 0 10px 25px rgba(0,0,0,0.4); }
+
+        .player-panel.active-turn {
+            border-color: var(--gold-bright);
+            box-shadow: 0 0 30px var(--gold-medium);
+            transform: scale(1.02);
+            z-index: 5;
+        }
+        
+        .role-badge {
+            position: absolute;
+            top: -15px;
+            right: 15px;
+            background: linear-gradient(to bottom, var(--gold-bright), var(--gold-medium));
+            color: var(--burgundy-dark);
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 900;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            font-family: 'Cinzel', serif;
+            border: 2px solid var(--gold-dark);
+            text-transform: uppercase;
+            z-index: 10;
+        }
+
+        .player-header {
+            display: flex;
+            align-items: center;
+            border-bottom: 2px solid rgba(44, 24, 16, 0.1);
+            padding-bottom: 12px;
+            margin-bottom: 12px;
+            gap: 15px;
+        }
+
+        .player-avatar {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 4px solid; /* Couleur définie en JS */
+            background: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 2.5rem;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+        }
+
+        .player-info {
+            flex-grow: 1;
+        }
+
+        .player-name { font-weight: bold; font-size: 1.4rem; font-family: 'Cinzel', serif; display: block; }
+        .player-money { font-weight: bold; color: var(--gold-dark); font-size: 1.6rem; font-family: 'Crimson Text', serif; display: block; margin-top: 2px; }
+
+        .ship-hold {
+            background: rgba(0,0,0,0.08);
+            border-radius: 6px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            gap: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(0,0,0,0.1);
+            box-shadow: inset 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .mini-card {
+            width: 45px;
+            height: 65px;
+            border-radius: 4px;
+            font-size: 1.1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            font-weight: bold;
+            border: 1px solid rgba(255,255,255,0.6);
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+            text-shadow: 1px 1px 0 rgba(0,0,0,0.5);
+            font-family: 'Cinzel', serif;
+            transition: transform 0.2s;
+        }
+        .mini-card:hover { transform: scale(1.1); z-index: 2; }
+
+        /* ----- PYRAMIDES (SCORING) ----- */
+        .monopolies-grid {
+            grid-area: monopolies;
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 15px;
+            background: var(--parchment);
+            padding: 25px;
+            border-radius: 8px;
+            border: 8px solid var(--wood-dark);
+            margin-top: 0;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            position: relative;
+            align-content: stretch;
+        }
+        
+        .monopolies-grid::before, .monopolies-grid::after {
+            content: '•'; font-size: 2.5rem; color: #5c4033; position: absolute; top: -10px;
+        }
+        .monopolies-grid::before { left: 15px; }
+        .monopolies-grid::after { right: 15px; }
+
+        .monopoly-track {
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: center;
+            background: rgba(0,0,0,0.03);
+            border-radius: 4px;
+            padding: 10px 5px;
+            border: 2px dashed var(--wood-light);
+            height: 100%;
+            justify-content: flex-end;
+        }
+
+        .track-step {
+            width: 100%;
+            flex-grow: 1; /* Remplir l'espace */
+            max-height: 50px; /* Limite */
+            border-bottom: 1px solid rgba(0,0,0,0.15);
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 0.9rem;
+            color: #888;
+            font-family: 'Cinzel', serif;
+        }
+        
+        .track-step.bonus { background: rgba(255, 215, 0, 0.15); color: var(--gold-dark); font-weight: bold; border-color: var(--gold-medium); }
+        .track-step.top { border-top: 1px solid rgba(0,0,0,0.1); }
+        
+        .player-marker {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.4);
+            position: absolute;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.4rem;
+            z-index: 2;
+            background: #fff;
+        }
+        
+        .player-marker:hover { z-index: 100; transform: scale(1.8); cursor: help; }
+
+        .track-icon { 
+            font-size: 3rem; 
+            margin-top: 15px; 
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.3));
+        }
+
+        /* ----- MESSAGES & MODALS ----- */
+        .message-log {
+            text-align: center;
+            font-style: italic;
+            height: 50px;
+            color: var(--burgundy);
+            font-weight: 600;
+            font-size: 1.3rem;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(4px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 2000;
+        }
+        
+        .modal-content {
+            background: var(--parchment);
+            padding: 50px;
+            border-radius: 8px;
+            border: 12px double var(--wood-dark);
+            max-width: 800px;
+            text-align: center;
+            box-shadow: 0 0 80px rgba(0,0,0,0.8);
+            animation: slideIn 0.3s;
+            position: relative;
+        }
+        
+        .modal-content::before {
+            content: '⚜️'; font-size: 4rem; color: rgba(0,0,0,0.1); 
+            position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+        }
+
+        @keyframes slideIn { from {transform: translateY(-50px); opacity: 0;} to {transform: translateY(0); opacity: 1;} }
+
+        /* ----- LAYOUT DESKTOP AVANCÉ ----- */
+        @media (min-width: 1200px) {
+            .game-board {
+                grid-template-columns: 2.5fr 1.5fr; /* 60% / 40% environ */
+                grid-template-rows: auto auto auto;
+                grid-template-areas: 
+                    "hud hud"
+                    "central monopolies"
+                    "players players";
+                gap: 30px;
+            }
+
+            .central-area {
+                min-height: 500px; /* Plus d'espace vertical */
+            }
+
+            .players-container {
+                grid-template-columns: repeat(4, 1fr); /* 4 joueurs en ligne */
+            }
+
+            .monopolies-grid {
+                height: 100%; /* S'aligne avec la zone centrale */
+            }
+
+            .card {
+                width: 160px;
+                height: 240px;
+            }
+            
+            .card-val { font-size: 4rem; }
+            .card-icon { font-size: 5.5rem; }
+        }
+
+        /* Responsive Mobile/Tablette Ajustements */
+        @media (max-width: 1199px) {
+            .game-board {
+                grid-template-areas: 
+                    "hud"
+                    "central"
+                    "players"
+                    "monopolies";
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .monopolies-grid { grid-template-columns: repeat(3, 1fr); }
+            .card { width: 90px; height: 135px; }
+            .card-val { font-size: 2rem; }
+            .card-icon { font-size: 2.5rem; }
+            .phase-indicator { font-size: 1.4rem; }
+            .main-title { font-size: 3rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-container">
+        <h1 class="main-title">MEDICI</h1>
+        <div class="sub-title">Florence • 1450</div>
+    </div>
+
+    <div class="game-board">
+        <!-- HEADER INFO -->
+        <div class="hud-panel">
+            <div class="game-status">
+                <span>📅 Jour: <span id="day-display" style="color:var(--burgundy-dark)">1</span>/3</span>
+                <span>🃏 Pioche: <span id="deck-display" style="color:var(--burgundy-dark)">0</span></span>
+            </div>
+            <div class="game-controls">
+                <button class="btn-secondary" onclick="game.toggleRules()">📜 Règles</button>
+                <button class="btn-primary" onclick="game.restart()">🔄 Nouveau</button>
+            </div>
+        </div>
+
+        <!-- ZONE D'ACTION -->
+        <div class="central-area">
+            <div class="phase-indicator" id="phase-text">Initialisation...</div>
+            <div class="message-log" id="game-message">Bienvenue à Florence, nobles marchands.</div>
+            
+            <div class="lot-display" id="lot-area">
+                <!-- Les cartes tirées apparaissent ici -->
+            </div>
+
+            <div class="action-bar" id="player-controls" style="display:none;">
+                <!-- Contrôles dynamiques JS -->
+            </div>
+        </div>
+
+        <!-- JOUEURS -->
+        <div class="players-container" id="players-area">
+            <!-- Injecté par JS -->
+        </div>
+
+        <!-- SCORING / PYRAMIDES -->
+        <div class="monopolies-grid" id="monopolies-area">
+            <!-- Injecté par JS -->
+        </div>
+    </div>
+
+    <!-- MODAL RÈGLES -->
+    <div id="rules-modal" class="modal" onclick="this.style.display='none'">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <h2 style="color:var(--burgundy); border-bottom:1px solid var(--gold-medium); padding-bottom:10px">Règles Officielles Medici</h2>
+            <div style="text-align: left; margin-top: 20px; font-size: 1rem; line-height: 1.6; color: var(--ink);">
+                <p><strong>👑 But :</strong> Devenir le marchand le plus riche de Florence après 3 jours.</p>
+                <br>
+                <p><strong>⚔️ Tour de jeu :</strong></p>
+                <ul>
+                    <li>Le joueur actif révèle 1, 2 ou 3 cartes pour former un lot.</li>
+                    <li>Il <strong>DOIT</strong> lancer une enchère s'il a révélé 3 cartes ou si sa cale va déborder.</li>
+                </ul>
+                <br>
+                <p><strong>💰 Enchères (Règle Officielle) :</strong></p>
+                <ul>
+                    <li>Un seul tour de table.</li>
+                    <li>Le joueur à gauche de l'offreur commence.</li>
+                    <li>L'offreur (joueur actif) parle en <strong>DERNIER</strong>.</li>
+                    <li>Le gagnant paie, prend le lot, et remplit sa cale (Max 5 cartes).</li>
+                </ul>
+                <br>
+                <p><strong>🏆 Scoring :</strong></p>
+                <ul>
+                    <li><strong>Navires :</strong> Valeur totale des cartes. (1er=30F, 2e=20F...).</li>
+                    <li><strong>Monopoles :</strong> Avancez sur les pistes par type de marchandise.
+                        <ul>
+                            <li>Palier 6 atteint : <strong>+10F</strong></li>
+                            <li>Palier 7 atteint : <strong>+20F</strong></li>
+                            <li>Majorité en fin de manche : 1er=10F, 2e=5F.</li>
+                        </ul>
+                    </li>
+                </ul>
+                <br>
+                <p style="text-align:center; color:var(--burgundy-light)"><em>(Cliquez n'importe où pour fermer)</em></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * MOTEUR DE JEU MEDICI
+         * Standards ES6+
+         */
+
+        // --- CONSTANTES ---
+        const TYPES = {
+            CLOTH: { id: 'cloth', name: 'Étoffes', color: '#9b111e', icon: '🧵' }, // Rouge Velours
+            FUR: { id: 'fur', name: 'Cuir', color: '#5d4037', icon: '🐂' }, // Marron
+            GRAIN: { id: 'grain', name: 'Épices', color: '#d4a017', icon: '🌶️' }, // Or/Jaune
+            DYE: { id: 'dye', name: 'Teinture', color: '#1a237e', icon: '🏺' }, // Bleu Indigo
+            METAL: { id: 'metal', name: 'Fer', color: '#546e7a', icon: '⚔️' } // Gris Acier
+        };
+        const GOLD_TYPE = { id: 'gold', name: 'Or', color: '#ffd700', icon: '⚜️' };
+
+        // Configuration pour 3 à 6 joueurs (Ici calibré pour 4 joueurs standards)
+        const CONFIG = {
+            START_MONEY: 40,
+            MAX_HOLD: 5,
+            ROUNDS: 3,
+            SHIP_PAYOUTS: [30, 20, 10, 0], // Pour 4 joueurs
+            MONOPOLY_PAYOUTS: { 1: 10, 2: 5 },
+            BONUS_TIERS: { 6: 10, 7: 20 }
+        };
+
+        class Card {
+            constructor(type, value) {
+                this.type = type;
+                this.value = value;
+                this.id = Math.random().toString(36).substr(2, 9);
+            }
+        }
+
+        class Player {
+            constructor(id, name, isHuman = false, color, avatar) {
+                this.id = id;
+                this.name = name;
+                this.isHuman = isHuman;
+                this.color = color;
+                this.avatar = avatar;
+                this.money = CONFIG.START_MONEY;
+                this.hold = []; // Cartes dans le bateau (max 5)
+                this.monopolies = { cloth: 0, fur: 0, grain: 0, dye: 0, metal: 0 };
+            }
+
+            get holdValue() {
+                return this.hold.reduce((sum, c) => sum + c.value, 0);
+            }
+
+            get remainingSpace() {
+                return CONFIG.MAX_HOLD - this.hold.length;
+            }
+        }
+
+        class MediciGame {
+            constructor() {
+                this.players = [];
+                this.deck = [];
+                this.currentRound = 1;
+                this.currentLot = [];
+                
+                // État du tour
+                this.activePlayerIndex = 0; // Celui qui tire les cartes (Auctioneer)
+                this.state = 'SETUP'; // SETUP, DRAW, AUCTION, RESOLUTION, ROUND_END, GAME_END
+                
+                // État des enchères
+                this.biddingOrder = []; // Liste des index des joueurs qui doivent enchérir
+                this.currentBidderIndex = 0; // Index dans biddingOrder
+                this.highestBid = -1;
+                this.highestBidderIndex = -1;
+
+                this.ui = {
+                    lot: document.getElementById('lot-area'),
+                    controls: document.getElementById('player-controls'),
+                    msg: document.getElementById('game-message'),
+                    phase: document.getElementById('phase-text'),
+                    players: document.getElementById('players-area'),
+                    monopolies: document.getElementById('monopolies-area'),
+                    deck: document.getElementById('deck-display'),
+                    day: document.getElementById('day-display')
+                };
+
+                this.init();
+            }
+
+            init() {
+                // Création des joueurs avec Identité Renaissance
+                this.players = [
+                    new Player(0, "Vous", true, "#27ae60", "🤴"), // Prince - Vert Émeraude
+                    new Player(1, "Lorenzo", false, "#c0392b", "🦁"), // Lion - Rouge Sang
+                    new Player(2, "Cosimo", false, "#2980b9", "🦅"), // Aigle - Bleu Royal
+                    new Player(3, "Piero", false, "#d35400", "⚖️") // Balance - Orange Brûlé
+                ];
+                this.startRound();
+            }
+
+            restart() {
+                if(confirm("Recommencer la partie ?")) this.init();
+            }
+
+            toggleRules() {
+                const modal = document.getElementById('rules-modal');
+                modal.style.display = modal.style.display === 'flex' ? 'none' : 'flex';
+            }
+
+            // --- LOGIQUE DE JEU ---
+
+            startRound() {
+                // Création du deck (0,1,2,3,4,5,5 par couleur + 1 carte 10 Or)
+                this.deck = [];
+                Object.values(TYPES).forEach(t => {
+                    [0,1,2,3,4,5,5].forEach(val => this.deck.push(new Card(t, val)));
+                });
+                this.deck.push(new Card(GOLD_TYPE, 10)); // La carte neutre forte
+                this.shuffleDeck();
+
+                // Reset des cales, mais pas de l'argent ni des monopoles
+                this.players.forEach(p => p.hold = []);
+                
+                this.activePlayerIndex = (this.currentRound - 1) % this.players.length; // Rotation du premier joueur
+                this.startTurnLogic();
+                this.updateUI();
+            }
+
+            shuffleDeck() {
+                for (let i = this.deck.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [this.deck[i], this.deck[j]] = [this.deck[j], this.deck[i]];
+                }
+            }
+
+            checkRoundEnd() {
+                // La manche finit si le deck est vide OU si tous les joueurs sont pleins
+                const allFull = this.players.every(p => p.remainingSpace === 0);
+                if (this.deck.length === 0 || allFull) {
+                    this.endRound();
+                    return true;
+                }
+                return false;
+            }
+
+            startTurnLogic() {
+                if (this.checkRoundEnd()) return;
+
+                // Trouver le prochain joueur actif valide (qui a de la place)
+                let attempts = 0;
+                while (this.players[this.activePlayerIndex].remainingSpace === 0 && attempts < 4) {
+                    this.activePlayerIndex = (this.activePlayerIndex + 1) % this.players.length;
+                    attempts++;
+                }
+
+                if (attempts >= 4) { this.endRound(); return; }
+
+                this.currentLot = [];
+                this.state = 'DRAW';
+                this.ui.phase.textContent = `Tour de ${this.players[this.activePlayerIndex].name}`;
+                this.ui.msg.textContent = "Examine les marchandises...";
+                
+                this.updateUI();
+
+                if (!this.players[this.activePlayerIndex].isHuman) {
+                    setTimeout(() => this.aiDrawDecision(), 1000);
+                }
+            }
+
+            // --- PHASE DE PIOCHE ---
+
+            drawCard() {
+                if (this.deck.length === 0) return;
+                const card = this.deck.pop();
+                this.currentLot.push(card);
+                this.updateUI();
+                return card;
+            }
+
+            handleHumanDraw() {
+                this.drawCard();
+                // Vérifier contraintes
+                if (this.currentLot.length === 3 || this.deck.length === 0 || this.currentLot.length >= this.players[this.activePlayerIndex].remainingSpace) {
+                    // Force auction
+                    this.initAuction();
+                } else {
+                    this.updateUI(); // Affiche bouton "Tirer encore" ou "Enchères"
+                }
+            }
+
+            aiDrawDecision() {
+                const ai = this.players[this.activePlayerIndex];
+                // Logique simple : essayer de tirer 2 ou 3 cartes sauf si la carte est super bonne
+                this.drawCard();
+                
+                const lotValue = this.evaluateLotValue(this.currentLot, ai);
+                
+                // Si le lot est très bon ou si pas de place ou max atteint -> Enchères
+                if (this.currentLot.length === 3 || this.currentLot.length >= ai.remainingSpace || (lotValue > 8 && Math.random() > 0.3)) {
+                    setTimeout(() => this.initAuction(), 1000);
+                } else {
+                    setTimeout(() => this.aiDrawDecision(), 1000); // Tire encore
+                }
+            }
+
+            // --- PHASE D'ENCHÈRES ---
+
+            initAuction() {
+                this.state = 'AUCTION';
+                this.highestBid = 0; 
+                this.highestBidderIndex = -1;
+                
+                // Ordre officiel : Joueur à gauche de l'actif commence. Actif finit.
+                this.biddingOrder = [];
+                const count = this.players.length;
+                for(let i = 1; i <= count; i++) {
+                    let idx = (this.activePlayerIndex + i) % count;
+                    // Seulement si le joueur a la place pour le lot
+                    if (this.players[idx].remainingSpace >= this.currentLot.length) {
+                        this.biddingOrder.push(idx);
+                    }
+                }
+
+                if (this.biddingOrder.length === 0) {
+                    this.ui.msg.textContent = "Cales pleines. Marchandises jetées aux porcs.";
+                    setTimeout(() => {
+                        this.currentLot = [];
+                        this.nextActivePlayer();
+                    }, 2000);
+                    return;
+                }
+
+                this.currentBidderIndex = 0;
+                this.nextBidder();
+            }
+
+            nextBidder() {
+                if (this.currentBidderIndex >= this.biddingOrder.length) {
+                    this.resolveAuction();
+                    return;
+                }
+
+                const pid = this.biddingOrder[this.currentBidderIndex];
+                const player = this.players[pid];
+                
+                this.ui.phase.textContent = `Enchères : Tour de ${player.name}`;
+                this.ui.msg.textContent = `Offre Max : ${this.highestBidderIndex === -1 ? '0' : this.highestBid + 'F (' + this.players[this.highestBidderIndex].name + ')'}`;
+                
+                this.updateUI();
+
+                if (!player.isHuman) {
+                    setTimeout(() => this.aiBid(player), 1000 + Math.random() * 500);
+                }
+            }
+
+            humanBid(amount) {
+                const p = this.players[0];
+                if (amount === null) { // PASSE
+                    this.ui.msg.textContent = "Vous passez votre tour.";
+                } else {
+                    if (amount > p.money) { alert("Vos coffres sont vides !"); return; }
+                    if (amount <= this.highestBid && this.highestBidderIndex !== -1) { alert("Il faut surenchérir !"); return; }
+                    this.highestBid = amount;
+                    this.highestBidderIndex = 0;
+                    this.ui.msg.textContent = `Vous offrez ${amount}F`;
+                }
+                this.currentBidderIndex++;
+                this.nextBidder();
+            }
+
+            // --- IA AVANCÉE (EVALUATION) ---
+            
+            evaluateLotValue(lot, player) {
+                // Heuristique de valeur
+                let value = 0;
+                
+                lot.forEach(c => {
+                    // Valeur brute pour le scoring de cale (30/20/10)
+                    value += c.value * 1.0; 
+
+                    // Valeur monopole
+                    if (c.type !== GOLD_TYPE) {
+                        const currentLevel = player.monopolies[c.type.id];
+                        // Bonus de palier
+                        if (currentLevel === 5) value += 8; // Passage à 6 (+10pts)
+                        if (currentLevel === 6) value += 15; // Passage à 7 (+20pts)
+                        value += 2; 
+                    } else {
+                        value += 2; 
+                    }
+                });
+                
+                const cardsNeeded = player.remainingSpace;
+                if (this.deck.length < 10 && cardsNeeded > 3) value *= 1.5;
+
+                return value;
+            }
+
+            aiBid(player) {
+                const perceivedValue = this.evaluateLotValue(this.currentLot, player);
+                const aggressiveness = player.money > 20 ? 0.8 : 0.6;
+                const maxBid = Math.floor(perceivedValue * aggressiveness);
+
+                const minToBid = (this.highestBidderIndex === -1) ? 1 : this.highestBid + 1;
+
+                if (minToBid <= maxBid && minToBid <= player.money) {
+                    this.highestBid = minToBid; 
+                    this.highestBidderIndex = player.id;
+                }
+                
+                this.currentBidderIndex++;
+                this.nextBidder();
+            }
+
+            // --- RÉSOLUTION ---
+
+            resolveAuction() {
+                if (this.highestBidderIndex !== -1) {
+                    const winner = this.players[this.highestBidderIndex];
+                    winner.money -= this.highestBid;
+                    winner.hold.push(...this.currentLot);
+                    this.ui.msg.textContent = `${winner.name} emporte le lot pour ${this.highestBid}F !`;
+                } else {
+                    this.ui.msg.textContent = "Aucune offre. Le lot est perdu.";
+                }
+
+                setTimeout(() => {
+                    this.currentLot = [];
+                    this.nextActivePlayer();
+                }, 2000);
+            }
+
+            nextActivePlayer() {
+                this.activePlayerIndex = (this.activePlayerIndex + 1) % this.players.length;
+                this.startTurnLogic();
+            }
+
+            // --- FIN DE MANCHE & SCORING ---
+
+            endRound() {
+                this.state = 'ROUND_END';
+                this.ui.phase.textContent = "Fin de la Journée - Les Comptes";
+                
+                // 1. Scoring Valeur Cales
+                let scores = this.players.map(p => ({ p: p, val: p.holdValue }));
+                scores.sort((a, b) => b.val - a.val);
+
+                // Attribution points navire
+                CONFIG.SHIP_PAYOUTS.forEach((amount, rank) => {
+                    if (scores[rank]) {
+                        scores[rank].p.money += amount;
+                    }
+                });
+
+                // 2. Scoring Monopoles
+                this.players.forEach(p => {
+                    p.hold.forEach(c => {
+                        if (c.type !== GOLD_TYPE) {
+                            p.monopolies[c.type.id] = Math.min(7, p.monopolies[c.type.id] + 1);
+                        }
+                    });
+                    
+                    // Bonus Paliers
+                    Object.values(p.monopolies).forEach(level => {
+                        if (level === 6) p.money += 10;
+                        if (level === 7) p.money += 20;
+                    });
+                });
+
+                // 3. Classement Monopoles (Majorités)
+                Object.keys(TYPES).forEach(typeId => {
+                    let monoScores = this.players.map(p => ({ p: p, val: p.monopolies[typeId] }));
+                    monoScores.sort((a, b) => b.val - a.val);
+                    
+                    if (monoScores[0].val > 0) monoScores[0].p.money += 10;
+                    if (monoScores[1].val > 0) monoScores[1].p.money += 5;
+                });
+
+                this.updateUI();
+                alert(`Fin du Jour ${this.currentRound} !\nLes bénéfices ont été versés aux coffres.`);
+
+                if (this.currentRound < CONFIG.ROUNDS) {
+                    this.currentRound++;
+                    this.startRound();
+                } else {
+                    this.endGame();
+                }
+            }
+
+            endGame() {
+                this.state = 'GAME_END';
+                let winner = this.players.sort((a, b) => b.money - a.money)[0];
+                this.ui.phase.textContent = "LA FLORENCE A CHOISI SON MAÎTRE";
+                this.ui.lot.innerHTML = `<div style="font-size:2rem; text-align:center; color:var(--burgundy); background:rgba(255,255,255,0.8); padding:20px; border-radius:10px; border:2px solid var(--gold-medium)">
+                    👑 Victoire de ${winner.name} !<br>
+                    <span style="font-size:1.5rem">Fortune Totale : ${winner.money} Florins</span>
+                </div>`;
+                this.ui.controls.style.display = 'none';
+            }
+
+            // --- RENDU UI ---
+
+            updateUI() {
+                this.ui.day.textContent = this.currentRound;
+                this.ui.deck.textContent = this.deck.length;
+
+                // Rendu Lot
+                this.ui.lot.innerHTML = '';
+                this.currentLot.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = `card ${c.type.id}`;
+                    if (c.type === GOLD_TYPE) div.className = 'card gold';
+                    div.innerHTML = `
+                        <div class="card-val">${c.value}</div>
+                        <div class="card-icon">${c.type.icon}</div>
+                        <div class="card-name">${c.type.name}</div>
+                    `;
+                    this.ui.lot.appendChild(div);
+                });
+
+                // Rendu Joueurs
+                this.ui.players.innerHTML = '';
+                this.players.forEach((p, idx) => {
+                    const panel = document.createElement('div');
+                    panel.className = 'player-panel';
+                    
+                    // Couleur dynamique de bordure si actif
+                    if ((this.state === 'DRAW' && idx === this.activePlayerIndex) || 
+                        (this.state === 'AUCTION' && this.biddingOrder[this.currentBidderIndex] === idx)) {
+                        panel.classList.add('active-turn');
+                        panel.style.borderColor = p.color;
+                    }
+                    
+                    // Badge Rôles
+                    if (this.state === 'AUCTION') {
+                        if (idx === this.activePlayerIndex) {
+                           panel.innerHTML += `<div class="role-badge" style="background:${p.color}; color:white">Offreur</div>`;
+                        }
+                        if (idx === this.highestBidderIndex) {
+                           panel.innerHTML += `<div class="role-badge" style="background:#fff; color:${p.color}; border:2px solid ${p.color}; top:20px">Meneur</div>`;
+                        }
+                    }
+
+                    // Cale
+                    let holdHTML = '';
+                    for(let i=0; i<CONFIG.MAX_HOLD; i++) {
+                        if (p.hold[i]) {
+                            let c = p.hold[i];
+                            let bg = c.type === GOLD_TYPE ? 'radial-gradient(circle, #ffd700, #daa520)' : c.type.color;
+                            holdHTML += `<div class="mini-card" style="background:${bg}; border-color:${p.color}">${c.value}</div>`;
+                        } else {
+                            holdHTML += `<div class="mini-card" style="background:rgba(0,0,0,0.05); border:1px dashed #aaa; box-shadow:none"></div>`;
+                        }
+                    }
+
+                    // Ajout Avatar
+                    const headerHTML = `
+                        <div class="player-header">
+                            <div class="player-avatar" style="border-color:${p.color}">${p.avatar}</div>
+                            <div class="player-info">
+                                <span class="player-name" style="color:${p.color}">${p.name}</span>
+                                <span class="player-money">${p.money} F</span>
+                            </div>
+                        </div>
+                    `;
+
+                    panel.innerHTML = headerHTML + `<div class="ship-hold">${holdHTML}</div>` + panel.innerHTML;
+                    this.ui.players.appendChild(panel);
+                });
+
+                // Rendu Contrôles Humain
+                this.ui.controls.innerHTML = '';
+                const human = this.players[0];
+                
+                if (this.state === 'DRAW' && this.activePlayerIndex === 0) {
+                    this.ui.controls.style.display = 'flex';
+                    // Bouton tirer
+                    if (this.currentLot.length < 3 && this.currentLot.length < human.remainingSpace && this.deck.length > 0) {
+                        const btnDraw = document.createElement('button');
+                        btnDraw.className = 'btn-secondary';
+                        btnDraw.textContent = "Piocher Carte";
+                        btnDraw.onclick = () => this.handleHumanDraw();
+                        this.ui.controls.appendChild(btnDraw);
+                    }
+                    // Bouton Enchères (Seulement si au moins 1 carte)
+                    if (this.currentLot.length > 0) {
+                        const btnAuc = document.createElement('button');
+                        btnAuc.className = 'btn-primary';
+                        btnAuc.textContent = "Ouvrir Enchères";
+                        btnAuc.onclick = () => this.initAuction();
+                        this.ui.controls.appendChild(btnAuc);
+                    }
+                } else if (this.state === 'AUCTION' && this.biddingOrder[this.currentBidderIndex] === 0) {
+                    this.ui.controls.style.display = 'flex';
+                    
+                    const minBid = (this.highestBidderIndex === -1) ? 1 : this.highestBid + 1;
+                    
+                    const inputGroup = document.createElement('div');
+                    inputGroup.className = 'bid-input-group';
+                    inputGroup.innerHTML = `<span style="font-weight:bold; color:var(--gold-dark)">Mise:</span> <input type="number" id="bidInput" value="${minBid}" min="${minBid}" max="${human.money}"> <span style="font-weight:bold; color:var(--burgundy)">F</span>`;
+                    
+                    const btnBid = document.createElement('button');
+                    btnBid.className = 'btn-primary';
+                    btnBid.textContent = "Surenchérir";
+                    btnBid.onclick = () => {
+                        const val = parseInt(document.getElementById('bidInput').value);
+                        this.humanBid(val);
+                    };
+
+                    const btnPass = document.createElement('button');
+                    btnPass.className = 'btn-secondary';
+                    btnPass.textContent = "Passer";
+                    btnPass.onclick = () => this.humanBid(null);
+
+                    this.ui.controls.appendChild(inputGroup);
+                    this.ui.controls.appendChild(btnBid);
+                    this.ui.controls.appendChild(btnPass);
+                } else {
+                    this.ui.controls.style.display = 'none';
+                }
+
+                // Rendu Monopoles (Pistes)
+                this.ui.monopolies.innerHTML = '';
+                Object.values(TYPES).forEach(t => {
+                    const track = document.createElement('div');
+                    track.className = 'monopoly-track';
+                    
+                    let stepsHTML = '';
+                    for (let i=7; i>=0; i--) {
+                        let classBonus = (i===6 || i===7) ? 'bonus' : '';
+                        let text = i===6 ? '+10' : (i===7 ? '+20' : i);
+                        let markers = '';
+                        
+                        // Groupement des joueurs sur la même case pour éviter les superpositions illisibles
+                        let playersOnStep = this.players.filter(p => p.monopolies[t.id] === i);
+                        
+                        playersOnStep.forEach((p, index) => {
+                            // Décalage visuel si plusieurs joueurs
+                            let offset = playersOnStep.length > 1 ? (index * 5) - ((playersOnStep.length-1)*2.5) : 0;
+                            markers += `<div class="player-marker" style="border-color:${p.color}; color:${p.color}; transform:translateX(${offset}px); z-index:${index+1}">${p.avatar}</div>`;
+                        });
+
+                        stepsHTML += `<div class="track-step ${classBonus}">${text}${markers}</div>`;
+                    }
+                    
+                    track.innerHTML = `
+                        ${stepsHTML}
+                        <div class="track-icon" style="color:${t.color}">${t.icon}</div>
+                    `;
+                    this.ui.monopolies.appendChild(track);
+                });
+            }
+        }
+
+        // Lancement
+        const game = new MediciGame();
+
+    </script>
+</body>
+</html>
